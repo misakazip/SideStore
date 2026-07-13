@@ -184,7 +184,13 @@ final class InstallAppOperation: ResultOperation<InstalledApp>, OperationLogging
                 if let appExtension = installedApp.appExtensions.first(where: { $0.bundleIdentifier == appExBundleID }) {
                     installedExtension = appExtension
                 } else {
-                    installedExtension = try InstalledExtension(resignedAppExtension: appExtension, originalBundleIdentifier: appExBundleID, context: backgroundContext)
+                    let fallbackProvisioningProfile = installedApp.useMainProfile ? resignedApp.provisioningProfile : nil
+                    installedExtension = try InstalledExtension(
+                        resignedAppExtension: appExtension,
+                        originalBundleIdentifier: appExBundleID,
+                        fallbackProvisioningProfile: fallbackProvisioningProfile,
+                        context: backgroundContext
+                    )
                 }
                 
                 installedExtension.update(resignedAppExtension: appExtension)

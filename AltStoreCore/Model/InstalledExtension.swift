@@ -32,7 +32,10 @@ public class InstalledExtension: BaseEntity, InstalledAppProtocol
         super.init(entity: entity, insertInto: context)
     }
     
-    public init(resignedAppExtension: ALTApplication, originalBundleIdentifier: String, context: NSManagedObjectContext) throws
+    public init(resignedAppExtension: ALTApplication,
+                originalBundleIdentifier: String,
+                fallbackProvisioningProfile: ALTProvisioningProfile? = nil,
+                context: NSManagedObjectContext) throws
     {
         super.init(entity: InstalledExtension.entity(), insertInto: context)
         
@@ -44,7 +47,10 @@ public class InstalledExtension: BaseEntity, InstalledAppProtocol
         #if targetEnvironment(simulator)
         self.expirationDate = self.refreshedDate.addingTimeInterval(60 * 60 * 24 * 7)
         #else
-        guard let expirationDate = resignedAppExtension.provisioningProfile?.expirationDate else {
+        // Extensions signed with the parent app's profile intentionally do not
+        // contain their own embedded.mobileprovision. In that case, use the
+        // parent profile for the extension's expiration metadata.
+        guard let expirationDate = (resignedAppExtension.provisioningProfile ?? fallbackProvisioningProfile)?.expirationDate else {
             throw ALTError.invalidApp(reason: "The app extension is missing a valid provisioning profile.")
         }
         self.expirationDate = expirationDate
