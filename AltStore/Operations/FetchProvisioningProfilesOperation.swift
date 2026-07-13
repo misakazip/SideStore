@@ -171,7 +171,14 @@ class FetchProvisioningProfilesOperation: ResultOperation<[String: ALTProvisioni
                                     parentApp: ALTApplication?,
                                     team: ALTTeam,
                                     session: ALTAppleAPISession) async throws -> ALTProvisioningProfile {
-        let preferredBundleID = try await self.fetchPreferredBundleID(for: app, team: team)
+        // A custom Bundle ID must receive its own App ID and provisioning profile.
+        // Reusing the installed app's preferred profile would silently restore the old ID.
+        let preferredBundleID: String?
+        if self.context.isBundleIdentifierOverridden {
+            preferredBundleID = nil
+        } else {
+            preferredBundleID = try await self.fetchPreferredBundleID(for: app, team: team)
+        }
         
         let bundleID: String
         
@@ -447,5 +454,3 @@ class FetchProvisioningProfilesRefreshOperation: FetchProvisioningProfilesInstal
         super.init(context: context)
     }
 }
-
-

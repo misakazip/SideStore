@@ -895,6 +895,24 @@ extension AppManager
         
         Task {
             do {
+                if let presentingViewController {
+                    let resolution = await self.resolveBundleIDForResigning(
+                        initial: installedApp.bundleIdentifier,
+                        presentingViewController: presentingViewController
+                    )
+
+                    switch resolution {
+                    case .resolved(let bundleIdentifier):
+                        if bundleIdentifier != installedApp.bundleIdentifier {
+                            group.customBundleIdentifier = bundleIdentifier
+                        }
+                    case .cancelled:
+                        completionHandler(.failure(OperationError.cancelled))
+                        group.progress.cancel()
+                        return
+                    }
+                }
+
                 try await self.perform([.resign(installedApp)], presentingViewController: presentingViewController, group: group)
             } catch {
                 completionHandler(.failure(error))
@@ -1191,7 +1209,13 @@ private extension AppManager
                     progress?.addChild(updateProgress, withPendingUnitCount: 80)
                     
                 case .resign(let app):
-                    let resignProgress = self._install(app, operation: operation, group: group, reviewPermissions: .none) { (result) in
+                    let resignProgress = self._install(
+                        app,
+                        operation: operation,
+                        group: group,
+                        bundleIdentifier: group.customBundleIdentifier,
+                        reviewPermissions: .none
+                    ) { (result) in
                         self.finish(operation, result: result, group: group, progress: progress)
                     }
                     progress?.addChild(resignProgress, withPendingUnitCount: 80)
@@ -1264,6 +1288,7 @@ private extension AppManager
                           operation appOperation: AppOperation,
                           group: RefreshGroup,
                           context: InstallAppOperationContext? = nil,
+                          bundleIdentifier: String? = nil,
                           additionalEntitlements: [ALTEntitlement: Any]? = [.increasedDebuggingMemoryLimit: ALTEntitlement.increasedDebuggingMemoryLimit, .increasedMemoryLimit: ALTEntitlement.increasedMemoryLimit, .extendedVirtualAddressing: ALTEntitlement.extendedVirtualAddressing],
                           reviewPermissions permissionReviewMode: VerifyAppOperation.PermissionReviewMode = .none,
                           cacheApp: Bool = true,
@@ -1271,7 +1296,8 @@ private extension AppManager
     {
         let progress = Progress.discreteProgress(totalUnitCount: 100)
         
-        let context = InstallAppOperationContext(bundleIdentifier: app.bundleIdentifier, authenticatedContext: group.context)
+        let context = InstallAppOperationContext(bundleIdentifier: bundleIdentifier ?? app.bundleIdentifier, authenticatedContext: group.context)
+        context.isBundleIdentifierOverridden = bundleIdentifier != nil
         assert(context.authenticatedContext === group.context)
         
         context.beginInstallationHandler = { (installedApp) in
@@ -1323,7 +1349,7 @@ private extension AppManager
         
         /* Verify App */
         let permissionsMode = UserDefaults.shared.permissionCheckingDisabled ? .none : permissionReviewMode
-        let verifyOperation = VerifyAppOperation(permissionsMode: permissionsMode, context: context, customBundleId: app.bundleIdentifier)
+        let verifyOperation = VerifyAppOperation(permissionsMode: permissionsMode, context: context, customBundleId: bundleIdentifier ?? app.bundleIdentifier)
         verifyOperation.resultHandler = { (result) in
             do
             {
@@ -2330,6 +2356,42 @@ private extension AppManager {
     enum BundleIDResolution {
         case resolved(String)
         case cancelled
+    }
+
+    @MainActor
+    func resolveBundleIDForResigning(
+        initial: String,
+        presentingViewController: UIViewController
+    ) async -> BundleIDResolution {
+        await withCheckedContinuation { continuation in
+            let alert = UIAlertController(
+                title: NSLocalizedString("Change Bundle ID?", comment: ""),
+                message: NSLocalizedString("Would you like to change the app's Bundle ID before signing?", comment: ""),
+                preferredStyle: .alert
+            )
+
+            alert.addAction(UIAlertAction(title: NSLocalizedString("No", comment: ""), style: .cancel) { _ in
+                continuation.resume(returning: .resolved(initial))
+            })
+            alert.addAction(UIAlertAction(title: NSLocalizedString("Yes", comment: ""), style: .default) { [weak self, weak presentingViewController] _ in
+                guard let self, let presentingViewController else {
+                    continuation.resume(returning: .cancelled)
+                    return
+                }
+
+                let bundleIDAlert = self._makeBundleIDOverrideAlert(
+                    initialBundleID: initial
+                ) { result in
+                    continuation.resume(returning: result)
+                }
+
+                alert.dismiss(animated: true) {
+                    presentingViewController.present(bundleIDAlert, animated: true)
+                }
+            })
+
+            presentingViewController.present(alert, animated: true)
+        }
     }
 
     @MainActor

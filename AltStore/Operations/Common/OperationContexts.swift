@@ -68,6 +68,7 @@ class AppOperationContext
     var provisioningProfiles: [String: ALTProvisioningProfile]?
     var appexBundleIds: [String: String]?
     var useMainProfile = false
+    var isBundleIdentifierOverridden = false
     
     var isFinished = false
     

@@ -18,6 +18,7 @@ final class RefreshGroup: NSObject
     
     var completionHandler: (([String: Result<InstalledApp, Error>]) -> Void)?
     var beginInstallationHandler: ((InstalledApp) -> Void)?
+    var customBundleIdentifier: String?
         
     private(set) var results = [String: Result<InstalledApp, Error>]()
     
