@@ -472,11 +472,10 @@ private extension DatabaseManager
                     }
                     else
                     {
-                        let fallbackProvisioningProfile = installedApp.useMainProfile ? localApp.provisioningProfile : nil
                         installedExtension = try InstalledExtension(
                             resignedAppExtension: appExtension,
                             originalBundleIdentifier: originalBundleID,
-                            fallbackProvisioningProfile: fallbackProvisioningProfile,
+                            fallbackProvisioningProfile: localApp.provisioningProfile,
                             context: context
                         )
                     }
